@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ქვეწარმავლების ტემპერატურის მარეგულირებელი და მამოძრავებელი სისტემა</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #ffffff;
+            overflow-x: hidden;
+        }
+        .container {
+            display: flex;
+            flex-direction: row;
+            flex: 1;
+            padding: 1rem;
+            gap: 1rem;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        #canvas {
+            border: 2px solid #333;
+            background-color: #ffffff;
+            flex: 2;
+            max-width: 70%;
+            height: 92vh;
+        }
+        .controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1rem;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 30%;
+        }
+        h2 {
+            margin: 0 0 0.5rem;
+            font-size: 1.2rem;
+            color: #333;
+        }
+        button, select, input {
+            padding: 0.5rem;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button:hover, select:hover, input:hover {
+            background-color: #ffffff;
+        }
+        label {
+            font-size: 0.9rem;
+            color: #555;
+        }
+        .status {
+            margin-top: 1rem;
+            font-size: 1rem;
+            color: #333;
+        }
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            #canvas, .controls {
+                max-width: 100%;
+            }
+            #canvas {
+                height: 40vh;
+            }
+            .controls {
+                max-width: 100%;
+            }
+            button, select, input {
+                font-size: 0.9rem;
+                padding: 0.4rem;
+            }
+            h2 {
+                font-size: 1rem;
+            }
+        }
+        @media (max-width: 480px) {
+            #canvas {
+                height: 30vh;
+            }
+            .controls {
+                padding: 0.5rem;
+            }
+            button, select, input {
+                font-size: 0.8rem;
+            }
+            h2 {
+                font-size: 0.9rem;
+            }  
+        }
+        #logo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 100px; 
+            height: auto; 
+            z-index: 10; 
+        }
+    </style>
+</head>
+<body>
+    <img id="logo" src="C:\Users\Eku\Desktop\Simulation\photo\GSILogo.png" alt="Logo">
+    <div class="container">
+        <canvas id="canvas"></canvas>
+        <div class="controls">
+            <h2>ქვეწარმავლის არჩევა</h2>
+            <select id="reptileType" onchange="changeReptile()">
+                <option value="lizard">🦎 ხვლიკი</option>
+                <option value="snake">🐍 გველი</option>
+            </select>
+
+            <h2>☀️ გარემოს ტემპერატურა</h2>
+            <label for="envTemp">ტემპერატურა (0-45°C):</label>
+            <input type="range" id="envTemp" min="0" max="45" value="25" oninput="updateEnvTemp()">
+            <div id="envTempDisplay">გარემო: 25°C</div>
+            <div id="bodyTempDisplay">სხეულის T: 25°C</div>
+
+            <h2>⚙️ მოძრაობის კონტროლი</h2>
+            <button id="moveBtn" onclick="toggleMovement()">დაწყება</button>
+
+            <div id="legsControl">
+                <h2>⚙️ კიდურების კონტროლი</h2>
+                <label>
+                <input type="checkbox" id="toggleLegs" checked onchange="updateLegsVisibility()">
+                ჩართვა/გამორთვა
+                </label>
+            </div>
+
+            <h2>ტალღის სიჩქარე (გველისთვის)</h2>
+            <label for="waveSpeed">სიჩქარე:</label>
+            <input type="range" id="waveSpeed" min="0.5" max="2" step="0.1" value="1" oninput="updateWaveSpeed()">
+        </div>
+    </div>
+
+    <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let reptileType = 'lizard';
+    let envTemp = 25;
+    let bodyTemp = 25;
+    let isMoving = false;
+    let waveSpeed = 1;
+    let showLegs = true;
+
+    let positionX = 50;
+    let time = 0;
+
+    // Snake segment system
+    const segmentCount = 20;
+    const segmentSpacing = 12;
+    const snakeSegments = [];
+
+    function initializeSnake() {
+        snakeSegments.length = 0;
+        for (let i = 0; i < segmentCount; i++) {
+            snakeSegments.push({
+                x: positionX - i * segmentSpacing,
+                y: canvas.height / 2,
+                angle: 0
+            });
+        }
+    }
+
+    // Responsive canvas sizing
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        if (reptileType === 'snake') initializeSnake();
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    function changeReptile() {
+        reptileType = document.getElementById('reptileType').value;
+        positionX = 50;
+
+        const legsControl = document.getElementById('legsControl');
+        if (reptileType === 'lizard') {
+            legsControl.style.display = 'block';
+        } else {
+            legsControl.style.display = 'none';
+            initializeSnake();
+        }
+    }
+
+    function updateEnvTemp() {
+        envTemp = parseInt(document.getElementById('envTemp').value);
+        document.getElementById('envTempDisplay').textContent = `გარემო: ${envTemp}°C`;
+    }
+
+    function updateWaveSpeed() {
+        waveSpeed = parseFloat(document.getElementById('waveSpeed').value);
+    }
+
+    function toggleMovement() {
+        isMoving = !isMoving;
+        document.getElementById('moveBtn').textContent = isMoving ? 'გაჩერება' : 'დაწყება';
+    }
+
+    function updateBodyTemp() {
+        const lag = 0.01;
+        bodyTemp += (envTemp - bodyTemp) * lag;
+        document.getElementById('bodyTempDisplay').textContent = `სხეულის T: ${bodyTemp.toFixed(1)}°C`;
+    }
+
+    function updateLegsVisibility() {
+        showLegs = document.getElementById('toggleLegs').checked;
+    }
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        updateBodyTemp();
+
+        canvas.style.backgroundColor = `#3c78d8`;
+
+        if (isMoving) {
+            time += 0.05 * waveSpeed;
+            if (reptileType === 'snake') {
+                // Snake head movement
+                snakeSegments[0].x += waveSpeed * 2;
+                if (snakeSegments[0].x > canvas.width + 100) {
+                    for (let s of snakeSegments) s.x -= canvas.width + 150;
+                }
+            } else {
+                positionX += 1;
+                if (positionX > canvas.width) positionX = 0;
+            }
+        }
+
+        if (reptileType === 'lizard') {
+            const centerY = canvas.height / 2;
+            const legPhase = isMoving ? Math.sin(time * 2) * 3 : 0;
+
+            // Body
+            ctx.fillStyle = 'green';
+            ctx.fillRect(positionX, centerY - 20, 40, 20);
+
+            // Head (small circle on the right)
+            ctx.beginPath();
+            ctx.arc(positionX + 46, centerY - 10, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#6b8e23';
+            ctx.fill();
+
+            // Eye
+            ctx.beginPath();
+            ctx.arc(positionX + 47, centerY - 13, 2, 0, Math.PI * 2); // მარჯვენა თვალი
+            ctx.arc(positionX + 47, centerY - 8, 2, 0, Math.PI * 2); // მარცხენა თვალი
+            ctx.fillStyle = 'black';
+            ctx.fill();
+
+            // Tail (curved line from left side)
+            ctx.beginPath();
+            ctx.moveTo(positionX, centerY - 10);
+            ctx.quadraticCurveTo(positionX - 15, centerY - 20, positionX - 30, centerY - 5);
+            ctx.strokeStyle = 'green';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            if (showLegs) {
+                ctx.fillStyle = 'darkgreen';
+                // ქვედა ფეხები (შიგნით 3px)
+                ctx.fillRect(positionX + 3 + legPhase, centerY - 5, 5, 10);
+                ctx.fillRect(positionX + 32 - legPhase, centerY - 5, 5, 10);
+
+                // ზედა ფეხები (შიგნით 3px)
+                ctx.fillRect(positionX + 3 - legPhase, centerY - 25, 5, 10);
+                ctx.fillRect(positionX + 32 + legPhase, centerY - 25, 5, 10);
+            }
+        }
+        else {
+            const amplitude = 20 * (45 / 35);
+            const k = 0.1;
+            const omega = 0.3 * waveSpeed;
+
+            for (let i = 0; i < segmentCount; i++) {
+                const xOffset = i * segmentSpacing;
+                snakeSegments[i].y = canvas.height / 2 + amplitude * Math.sin(k * xOffset - omega * time);
+                if (i > 0) {
+                    snakeSegments[i].x = snakeSegments[0].x - i * segmentSpacing;
+                    const dx = snakeSegments[i - 1].x - snakeSegments[i].x;
+                    const dy = snakeSegments[i - 1].y - snakeSegments[i].y;
+                    snakeSegments[i].angle = Math.atan2(dy, dx);
+                }
+            }
+
+            ctx.strokeStyle = 'brown';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(snakeSegments[0].x, snakeSegments[0].y);
+            for (let i = 1; i < segmentCount; i++) {
+                ctx.lineTo(snakeSegments[i].x, snakeSegments[i].y);
+            }
+            ctx.stroke();
+
+            // Draw snake head
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(snakeSegments[0].x, snakeSegments[0].y, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw body dots
+            for (let i = 1; i < segmentCount; i++) {
+                ctx.fillStyle = '#333';
+                ctx.beginPath();
+                ctx.arc(snakeSegments[i].x, snakeSegments[i].y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+</script>
+
+</body>
+</html>
